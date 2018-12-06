@@ -139,7 +139,7 @@ grid.arrange(sun.smooth, scr.smooth,
 ```{r, echo = FALSE}
 
 
-### Crossvalidation for best polynomial 
+### Function for best polynomial 
 
 
 bestpoly = function(x, y, folds, maxpoly){
@@ -155,10 +155,13 @@ bestpoly = function(x, y, folds, maxpoly){
     testx = x[leaveout[[i]]]
     testy = y[leaveout[[i]]]
     
+    train.mat = as.data.frame(cbind(y=trainy, x = trainx))
+    test.mat = as.data.frame(cbind(y = testy, x = testx))
+    
     for (j in 1:maxpoly) {
       
-      mod = lm(trainy ~ poly(trainx, degree = j, raw = TRUE))
-      preds = predict(mod, newdata = poly(testx, degree = j))
+      mod = lm(y ~ poly(x, degree = j, raw = TRUE), data = train.mat)
+      preds = predict(mod, newdata = test.mat)
       error = mean((testy - preds)^2)
       error.matrix[i,j] = error
       
@@ -174,26 +177,47 @@ bestpoly = function(x, y, folds, maxpoly){
 }
 
 
-bestpoly(x = iod.clean$AGE, y = log(iod.clean$GFR), folds = 10, maxpoly = 6)
+```
+
+```{r, echo = FALSE}
+
+### Function for best step (equal breaks)
 
 
+bestpoly = function(x, y, folds, maxbreaks){
+  
+  leaveout = createFolds(x, k = folds)
+  error.matrix = matrix(NA, nrow = folds, ncol = maxpoly)
+  
+  for (i in 1:folds) {
+    
+    trainx = x[-leaveout[[i]]]
+    trainy = y[-leaveout[[i]]]
+    
+    testx = x[leaveout[[i]]]
+    testy = y[leaveout[[i]]]
+    
+    train.mat = as.data.frame(cbind(y=trainy, x = trainx))
+    test.mat = as.data.frame(cbind(y = testy, x = testx))
+    
+    for (j in 2:maxbreaks) {
+      
+      mod = lm(y ~ cut(x, breaks = j, data = train.mat))
+      preds = predict(mod, newdata = test.mat)
+      error = mean((testy - preds)^2)
+      error.matrix[i,j] = error
+      
+    }
+    
+  }
+  
+  ave.mse = apply(error.matrix, 2, mean)
+  
+  return(ave.mse)
+  
+  
+}
 
-x = iod.clean$AGE
-y = log(iod.clean$GFR)
-
-leaveout = createFolds(x, k = 10)
-
-xtrain = x[-leaveout[[1]]]
-ytrain = y[-leaveout[[1]]]
-
-testx = x[leaveout[[1]]]
-testy = y[leaveout[[1]]]
-
-mod = lm(ytrain ~ poly(xtrain, degree = 2, raw = TRUE))
-
-preds = predict(mod, newdata = (poly(testx, degree = 2, raw = TRUE, coefs = coef(mod))))
-
-mean((testy - preds)^2)
 
 ```
 
