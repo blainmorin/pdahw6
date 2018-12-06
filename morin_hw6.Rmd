@@ -441,15 +441,16 @@ iod.clean = iod.clean %>%
 age.transforms = iod.clean %>%
   ggplot(aes(y = logGFR, x = AGE)) +
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  geom_smooth(aes(colour = "Smoothing Spline"), method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
   ylab("log(GFR)") +
   xlab("AGE") +
   ggtitle("log(GFR) vs AGE") +
   theme_classic() +
   theme(text=element_text(size=12,  family="CM Sans")) +
-  geom_line(aes(y = age.step.preds), colour = "red", size = 1.5) +
-  geom_line(aes(y = age.poly.preds), colour = "green", size = 1.5) +
-  geom_line(aes(y = age.spline.preds), colour = "yellow", size = 1.5) 
+  geom_line(aes(y = age.step.preds, colour = "Best Step"), size = 1.5) +
+  geom_line(aes(y = age.poly.preds, colour = "Best Poly"), size = 1.5) +
+  geom_line(aes(y = age.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
+  scale_colour_manual(name = "Legend", values = cols)
   
 
 ```
@@ -495,15 +496,16 @@ iod.clean = iod.clean %>%
 cys.transforms = iod.clean %>%
   ggplot(aes(y = logGFR, x = cys)) +
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  geom_smooth(aes(color = "Smoothing Spline"), method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
   ylab("log(GFR)") +
   xlab("CYS") +
   ggtitle("log(GFR) vs CYS") +
   theme_classic() +
   theme(text=element_text(size=12,  family="CM Sans")) +
-  geom_line(aes(y = cys.step.preds), colour = "red", size = 1.5) +
-  geom_line(aes(y = cys.poly.preds), colour = "green", size = 1.5) +
-  geom_line(aes(y = cys.spline.preds), colour = "yellow", size = 1.5) 
+  geom_line(aes(y = cys.step.preds, colour = "Best Step"), size = 1.5) +
+  geom_line(aes(y = cys.poly.preds, colour = "Best Poly"), size = 1.5) +
+  geom_line(aes(y = cys.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
+  scale_colour_manual(name = "Legend", values = cols)
   
 
 ```
@@ -549,15 +551,16 @@ iod.clean = iod.clean %>%
 bmi.transforms = iod.clean %>%
   ggplot(aes(y = logGFR, x = BMI)) +
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  geom_smooth(aes(colour = "Smoothing Spline"), method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
   ylab("log(GFR)") +
   xlab("BMI") +
   ggtitle("log(GFR) vs BMI") +
   theme_classic() +
   theme(text=element_text(size=12,  family="CM Sans")) +
-  geom_line(aes(y = bmi.step.preds), colour = "red", size = 1.5) +
-  geom_line(aes(y = bmi.poly.preds), colour = "green", size = 1.5) +
-  geom_line(aes(y = bmi.spline.preds), colour = "yellow", size = 1.5) 
+  geom_line(aes(y = bmi.step.preds, colour = "Best Step"), size = 1.5) +
+  geom_line(aes(y = bmi.poly.preds, colour = "Best Poly"), size = 1.5) +
+  geom_line(aes(y = bmi.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
+  scale_colour_manual(name = "Legend", values = cols)
   
 
 ```
@@ -605,15 +608,17 @@ iod.clean = iod.clean %>%
 log.sun.transforms = iod.clean %>%
   ggplot(aes(y = logGFR, x = logSUN)) +
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  geom_smooth(aes(colour = "Smoothing Spline"), method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
   ylab("log(GFR)") +
   xlab("log(SUN)") +
   ggtitle("log(GFR) vs log(SUN)") +
   theme_classic() +
   theme(text=element_text(size=12,  family="CM Sans")) +
-  geom_line(aes(y = log.sun.step.preds), colour = "red", size = 1.5) +
-  geom_line(aes(y = log.sun.poly.preds), colour = "green", size = 1.5) +
-  geom_line(aes(y = log.sun.spline.preds), colour = "yellow", size = 1.5) 
+  geom_line(aes(y = log.sun.step.preds, colour = "Best Step"), size = 1.5) +
+  geom_line(aes(y = log.sun.poly.preds, colour = "Best Poly"), size = 1.5) +
+  geom_line(aes(y = log.sun.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
+  scale_colour_manual(name = "Legend", values = cols)
+  
   
 
 ```
@@ -659,15 +664,16 @@ iod.clean = iod.clean %>%
 log.scr.transforms = iod.clean %>%
   ggplot(aes(y = logGFR, x = logSCR)) +
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  geom_smooth(aes(colour = "Smoothing Spline"), method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
   ylab("log(GFR)") +
   xlab("log(SCR)") +
   ggtitle("log(GFR) vs log(SCR)") +
   theme_classic() +
   theme(text=element_text(size=12,  family="CM Sans")) +
-  geom_line(aes(y = log.scr.step.preds), colour = "red", size = 1.5) +
-  geom_line(aes(y = log.scr.poly.preds), colour = "green", size = 1.5) +
-  geom_line(aes(y = log.scr.spline.preds), colour = "yellow", size = 1.5) 
+  geom_line(aes(y = log.scr.step.preds, colour = "Best Step"), size = 1.5) +
+  geom_line(aes(y = log.scr.poly.preds, colour = "Best Poly"), size = 1.5) +
+  geom_line(aes(y = log.scr.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
+  scale_colour_manual(name = "Legend", values = cols)
   
 
 ```
@@ -713,15 +719,16 @@ iod.clean = iod.clean %>%
 log.age.transforms = iod.clean %>%
   ggplot(aes(y = logGFR, x = logAGE)) +
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  geom_smooth(aes(colour = "Smoothing Spline"), method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
   ylab("log(GFR)") +
   xlab("log(AGE)") +
   ggtitle("log(GFR) vs log(AGE)") +
   theme_classic() +
   theme(text=element_text(size=12,  family="CM Sans")) +
-  geom_line(aes(y = log.age.step.preds), colour = "red", size = 1.5) +
-  geom_line(aes(y = log.age.poly.preds), colour = "green", size = 1.5) +
-  geom_line(aes(y = log.age.spline.preds), colour = "yellow", size = 1.5) 
+  geom_line(aes(y = log.age.step.preds, colour = "Best Step"), size = 1.5) +
+  geom_line(aes(y = log.age.poly.preds, colour = "Best Poly"), size = 1.5) +
+  geom_line(aes(y = log.age.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
+  scale_colour_manual(name = "Legend", values = cols)
   
 
 ```
@@ -767,15 +774,16 @@ iod.clean = iod.clean %>%
 log.cys.transforms = iod.clean %>%
   ggplot(aes(y = logGFR, x = logcys)) +
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  geom_smooth(aes(colour = "Smoothing Spline") ,method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
   ylab("log(GFR)") +
   xlab("log(CYS)") +
   ggtitle("log(GFR) vs log(CYS)") +
   theme_classic() +
   theme(text=element_text(size=12,  family="CM Sans")) +
-  geom_line(aes(y = log.cys.step.preds), colour = "red", size = 1.5) +
-  geom_line(aes(y = log.cys.poly.preds), colour = "green", size = 1.5) +
-  geom_line(aes(y = log.cys.spline.preds), colour = "yellow", size = 1.5) 
+  geom_line(aes(y = log.cys.step.preds, colour = "Best Step"), size = 1.5) +
+  geom_line(aes(y = log.cys.poly.preds, colour = "Best Poly"), size = 1.5) +
+  geom_line(aes(y = log.cys.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
+  scale_colour_manual(name = "Legend", values = cols)
   
 
 ```
@@ -821,15 +829,16 @@ iod.clean = iod.clean %>%
 log.bmi.transforms = iod.clean %>%
   ggplot(aes(y = logGFR, x = logBMI)) +
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  geom_smooth(aes(colour = "Smoothing Spline"), method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
   ylab("log(GFR)") +
   xlab("log(BMI)") +
   ggtitle("log(GFR) vs log(BMI)") +
   theme_classic() +
   theme(text=element_text(size=12,  family="CM Sans")) +
-  geom_line(aes(y = log.bmi.step.preds), colour = "red", size = 1.5) +
-  geom_line(aes(y = log.bmi.poly.preds), colour = "green", size = 1.5) +
-  geom_line(aes(y = log.bmi.spline.preds), colour = "yellow", size = 1.5) 
+  geom_line(aes(y = log.bmi.step.preds, colour = "Best Step"), size = 1.5) +
+  geom_line(aes(y = log.bmi.poly.preds, colour = "Best Poly"), size = 1.5) +
+  geom_line(aes(y = log.bmi.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
+  scale_colour_manual(name = "Legend", values = cols)
   
 
 ```
