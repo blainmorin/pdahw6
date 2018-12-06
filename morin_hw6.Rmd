@@ -10,6 +10,8 @@ header-includes:
 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
 
+set.seed(100)
+
 ### Load Libraries
 
 library(knitr)
@@ -73,13 +75,22 @@ gfr.qq
 
 ```
 
+```{r, echo = FALSE}
+
+###Add log(GFR)
+
+iod.clean = iod.clean %>%
+  mutate(logGFR = log(GFR))
+
+```
+
 
 ```{r, echo = FALSE, fig.width=12, fig.height=12}
 
 sun.smooth = iod.clean %>%
-  ggplot(aes(y = log(GFR), x = SUN)) +
+  ggplot(aes(y = logGFR, x = SUN)) +
   geom_point() +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
   ylab("log(GFR)") +
   xlab("SUN") +
   ggtitle("log(GFR) vs SUN") +
@@ -87,7 +98,7 @@ sun.smooth = iod.clean %>%
   theme(text=element_text(size=12,  family="CM Sans"))
 
 scr.smooth = iod.clean %>%
-  ggplot(aes(y = log(GFR), x = SCR)) +
+  ggplot(aes(y = logGFR, x = SCR)) +
   geom_point() +
   geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE) +
   ylab("log(GFR)") +
@@ -97,7 +108,7 @@ scr.smooth = iod.clean %>%
   theme(text=element_text(size=12,  family="CM Sans"))
 
 age.smooth = iod.clean %>%
-  ggplot(aes(y = log(GFR), x = AGE)) +
+  ggplot(aes(y = logGFR, x = AGE)) +
   geom_point() +
   geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE) +
   ylab("log(GFR)") +
@@ -107,7 +118,7 @@ age.smooth = iod.clean %>%
   theme(text=element_text(size=12,  family="CM Sans"))
 
 cys.smooth = iod.clean %>%
-  ggplot(aes(y = log(GFR), x = cys)) +
+  ggplot(aes(y = logGFR, x = cys)) +
   geom_point() +
   geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE) +
   ylab("log(GFR)") +
@@ -117,7 +128,7 @@ cys.smooth = iod.clean %>%
   theme(text=element_text(size=12,  family="CM Sans"))
 
 bmi.smooth = iod.clean %>%
-  ggplot(aes(y = log(GFR), x = BMI)) +
+  ggplot(aes(y = logGFR, x = BMI)) +
   geom_point() +
   geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE) +
   ylab("log(GFR)") +
@@ -184,10 +195,55 @@ bestpoly = function(x, y, folds, maxpoly){
 ### Function for best step (equal breaks)
 
 
-bestpoly = function(x, y, folds, maxbreaks){
+beststep = function(x, y, folds, maxbreaks){
   
   leaveout = createFolds(x, k = folds)
-  error.matrix = matrix(NA, nrow = folds, ncol = maxpoly)
+  error.matrix = matrix(NA, nrow = folds, ncol = maxbreaks-1)
+  
+  for (j in 2:maxbreaks) {
+    
+    a = cut(as.numeric(x), breaks = j)
+    
+    for (i in 1:folds) {
+      
+      trainx = a[-leaveout[[i]]]
+      trainy = y[-leaveout[[i]]]
+    
+      testx = a[leaveout[[i]]]
+      testy = y[leaveout[[i]]]
+    
+      train.mat = as.data.frame(cbind(y=trainy, b = trainx))
+      test.mat = as.data.frame(cbind(y = testy, b = testx))
+      
+      
+      
+      mod = lm(y ~ as.factor(b), data = train.mat)
+      preds = predict(mod, newdata = test.mat)
+      error = mean((testy - preds)^2)
+      error.matrix[i, j-1] = error
+      
+    }
+    
+  }
+  
+  ave.mse = apply(error.matrix, 2, mean)
+  names(ave.mse) = 2:maxbreaks
+  
+  return(ave.mse)
+  
+  
+}
+
+
+
+
+```
+
+```{r, echo = FALSE}
+
+bestspline = function(x, y, folds, dfs) {
+  leaveout = createFolds(x, k = folds)
+  error.matrix = matrix(NA, nrow = folds, ncol = dfs)
   
   for (i in 1:folds) {
     
@@ -199,25 +255,309 @@ bestpoly = function(x, y, folds, maxbreaks){
     
     train.mat = as.data.frame(cbind(y=trainy, x = trainx))
     test.mat = as.data.frame(cbind(y = testy, x = testx))
-    
-    for (j in 2:maxbreaks) {
+
+    for (j in 1:dfs) {
       
-      mod = lm(y ~ cut(x, breaks = j, data = train.mat))
-      preds = predict(mod, newdata = test.mat)
+      fit.nspline=lm(y~ns(x,df=j),data=train.mat)  #Fit natural spline
+      preds=predict(fit.nspline,newdata=test.mat,se=T)$fit
+      
       error = mean((testy - preds)^2)
       error.matrix[i,j] = error
-      
     }
-    
   }
   
   ave.mse = apply(error.matrix, 2, mean)
   
   return(ave.mse)
-  
-  
 }
 
+
+```
+
+```{r, echo = FALSE, fig.height=10, fig.width=10}
+
+### SUN best transforms
+
+
+### Poly
+sun.best.poly = which.min(bestpoly(x = iod.clean$SUN, y = iod.clean$logGFR, 
+                         folds = 10, maxpoly = 10))
+
+sun.poly.mod = lm(logGFR ~ poly(SUN, sun.best.poly), data = iod.clean)
+
+iod.clean = iod.clean %>%
+  mutate(sun.poly.preds = predict(sun.poly.mod))
+
+
+### Step
+
+sun.best.step = which.min(beststep(x = iod.clean$SUN, y = iod.clean$logGFR,
+                                   folds = 10, maxbreaks = 10))
+
+sun.step.mod = lm(logGFR ~ cut(SUN, breaks = sun.best.step + 1), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(sun.step.preds = predict(sun.step.mod))
+
+
+### Spline
+
+sun.best.spline = which.min(bestspline(x = iod.clean$SUN, y = iod.clean$logGFR,
+                                   folds = 10, dfs = 10))
+
+sun.spline.mod = lm(logGFR ~ ns(SUN, df = sun.best.spline), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(sun.spline.preds = predict(sun.spline.mod))
+
+sun.transforms = iod.clean %>%
+  ggplot(aes(y = logGFR, x = SUN)) +
+  geom_point() +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  ylab("log(GFR)") +
+  xlab("SUN") +
+  ggtitle("log(GFR) vs SUN") +
+  theme_classic() +
+  theme(text=element_text(size=12,  family="CM Sans")) +
+  geom_line(aes(y = sun.step.preds), colour = "red", size = 1.5) +
+  geom_line(aes(y = sun.poly.preds), colour = "green", size = 1.5) +
+  geom_line(aes(y = sun.spline.preds), colour = "yellow", size = 1.5) 
+  
+
+```
+
+```{r, echo = FALSE, fig.height=10, fig.width=10}
+
+### SCR best transforms
+
+
+### Poly
+scr.best.poly = which.min(bestpoly(x = iod.clean$SCR, y = iod.clean$logGFR, 
+                         folds = 10, maxpoly = 10))
+
+scr.poly.mod = lm(logGFR ~ poly(SCR, scr.best.poly), data = iod.clean)
+
+iod.clean = iod.clean %>%
+  mutate(scr.poly.preds = predict(scr.poly.mod))
+
+
+### Step
+
+scr.best.step = which.min(beststep(x = iod.clean$SCR, y = iod.clean$logGFR,
+                                   folds = 10, maxbreaks = 10))
+
+scr.step.mod = lm(logGFR ~ cut(SCR, breaks = scr.best.step + 1), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(scr.step.preds = predict(scr.step.mod))
+
+
+### Spline
+
+scr.best.spline = which.min(bestspline(x = iod.clean$SCR, y = iod.clean$logGFR,
+                                   folds = 10, dfs = 10))
+
+scr.spline.mod = lm(logGFR ~ ns(SCR, df = scr.best.spline), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(scr.spline.preds = predict(scr.spline.mod))
+
+scr.transforms = iod.clean %>%
+  ggplot(aes(y = logGFR, x = SCR)) +
+  geom_point() +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  ylab("log(GFR)") +
+  xlab("SCR") +
+  ggtitle("log(GFR) vs SCR") +
+  theme_classic() +
+  theme(text=element_text(size=12,  family="CM Sans")) +
+  geom_line(aes(y = scr.step.preds), colour = "red", size = 1.5) +
+  geom_line(aes(y = scr.poly.preds), colour = "green", size = 1.5) +
+  geom_line(aes(y = scr.spline.preds), colour = "yellow", size = 1.5) 
+  
+
+```
+
+```{r, echo = FALSE, fig.height=10, fig.width=10}
+
+### AGE best transforms
+
+
+### Poly
+age.best.poly = which.min(bestpoly(x = iod.clean$AGE, y = iod.clean$logGFR, 
+                         folds = 10, maxpoly = 10))
+
+age.poly.mod = lm(logGFR ~ poly(AGE, age.best.poly), data = iod.clean)
+
+iod.clean = iod.clean %>%
+  mutate(age.poly.preds = predict(age.poly.mod))
+
+
+### Step
+
+age.best.step = which.min(beststep(x = iod.clean$AGE, y = iod.clean$logGFR,
+                                   folds = 10, maxbreaks = 10))
+
+age.step.mod = lm(logGFR ~ cut(AGE, breaks = age.best.step + 1), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(age.step.preds = predict(age.step.mod))
+
+
+### Spline
+
+age.best.spline = which.min(bestspline(x = iod.clean$AGE, y = iod.clean$logGFR,
+                                   folds = 10, dfs = 10))
+
+age.spline.mod = lm(logGFR ~ ns(AGE, df = age.best.spline), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(age.spline.preds = predict(age.spline.mod))
+
+age.transforms = iod.clean %>%
+  ggplot(aes(y = logGFR, x = AGE)) +
+  geom_point() +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  ylab("log(GFR)") +
+  xlab("AGE") +
+  ggtitle("log(GFR) vs AGE") +
+  theme_classic() +
+  theme(text=element_text(size=12,  family="CM Sans")) +
+  geom_line(aes(y = age.step.preds), colour = "red", size = 1.5) +
+  geom_line(aes(y = age.poly.preds), colour = "green", size = 1.5) +
+  geom_line(aes(y = age.spline.preds), colour = "yellow", size = 1.5) 
+  
+
+```
+
+```{r, echo = FALSE, fig.height=10, fig.width=10}
+
+### cys best transforms
+
+
+### Poly
+cys.best.poly = which.min(bestpoly(x = iod.clean$cys, y = iod.clean$logGFR, 
+                         folds = 10, maxpoly = 10))
+
+cys.poly.mod = lm(logGFR ~ poly(cys, cys.best.poly), data = iod.clean)
+
+iod.clean = iod.clean %>%
+  mutate(cys.poly.preds = predict(cys.poly.mod))
+
+
+### Step
+
+cys.best.step = which.min(beststep(x = iod.clean$cys, y = iod.clean$logGFR,
+                                   folds = 10, maxbreaks = 10))
+
+cys.step.mod = lm(logGFR ~ cut(cys, breaks = cys.best.step + 1), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(cys.step.preds = predict(cys.step.mod))
+
+
+### Spline
+
+cys.best.spline = which.min(bestspline(x = iod.clean$cys, y = iod.clean$logGFR,
+                                   folds = 10, dfs = 10))
+
+cys.spline.mod = lm(logGFR ~ ns(cys, df = cys.best.spline), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(cys.spline.preds = predict(cys.spline.mod))
+
+cys.transforms = iod.clean %>%
+  ggplot(aes(y = logGFR, x = cys)) +
+  geom_point() +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  ylab("log(GFR)") +
+  xlab("CYS") +
+  ggtitle("log(GFR) vs CYS") +
+  theme_classic() +
+  theme(text=element_text(size=12,  family="CM Sans")) +
+  geom_line(aes(y = cys.step.preds), colour = "red", size = 1.5) +
+  geom_line(aes(y = cys.poly.preds), colour = "green", size = 1.5) +
+  geom_line(aes(y = cys.spline.preds), colour = "yellow", size = 1.5) 
+  
+
+```
+
+```{r, echo = FALSE, fig.height=10, fig.width=10}
+
+### BMI best transforms
+
+
+### Poly
+bmi.best.poly = which.min(bestpoly(x = iod.clean$BMI, y = iod.clean$logGFR, 
+                         folds = 10, maxpoly = 10))
+
+bmi.poly.mod = lm(logGFR ~ poly(BMI, bmi.best.poly), data = iod.clean)
+
+iod.clean = iod.clean %>%
+  mutate(bmi.poly.preds = predict(bmi.poly.mod))
+
+
+### Step
+
+bmi.best.step = which.min(beststep(x = iod.clean$BMI, y = iod.clean$logGFR,
+                                   folds = 10, maxbreaks = 5))
+
+bmi.step.mod = lm(logGFR ~ cut(BMI, breaks = bmi.best.step + 1), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(bmi.step.preds = predict(bmi.step.mod))
+
+
+### Spline
+
+bmi.best.spline = which.min(bestspline(x = iod.clean$BMI, y = iod.clean$logGFR,
+                                   folds = 10, dfs = 10))
+
+bmi.spline.mod = lm(logGFR ~ ns(BMI, df = scr.best.spline), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(bmi.spline.preds = predict(bmi.spline.mod))
+
+bmi.transforms = iod.clean %>%
+  ggplot(aes(y = logGFR, x = BMI)) +
+  geom_point() +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5, colour = "blue") +
+  ylab("log(GFR)") +
+  xlab("BMI") +
+  ggtitle("log(GFR) vs SCR") +
+  theme_classic() +
+  theme(text=element_text(size=12,  family="CM Sans")) +
+  geom_line(aes(y = bmi.step.preds), colour = "red", size = 1.5) +
+  geom_line(aes(y = bmi.poly.preds), colour = "green", size = 1.5) +
+  geom_line(aes(y = bmi.spline.preds), colour = "yellow", size = 1.5) 
+  
+
+```
+
+```{r, echo = FALSE, fig.height=15, fig.width=12}
+
+### All transform plots
+
+grid.arrange(sun.transforms, scr.transforms,
+             age.transforms, cys.transforms,
+             bmi.transforms, 
+             nrow = 3)
+
+
+```
+
+
+```{r, echo = FALSE}
 
 ```
 
