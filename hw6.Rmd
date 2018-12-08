@@ -1,12 +1,18 @@
 ---
 title: "PHP 2550 HW 6"
 author: "Blain Morin"
-date: "December 2, 2018"
+date: "December 10, 2018"
 output: pdf_document
 header-includes:
 - \usepackage{float}
 ---
 
+
+In this assignment, we build upon the model for predicting glomerular filtration rate (GFR) that we constructed in homework 5. The goal of this assignment is to choose the best form of the variables. Using the variables selected by step regression, we will consider non linear transformations (polynomials, splines, step functions, and generalized additive models) for the continuous predictors. 
+
+Our strategy is to first fit polynomial, natural spline, and step transformations for each independent variable individually against the outcome. We tune each transformation using 10 fold cross validation. After determining the best form of each transformation, we compare their overall fits to the data to determine the best transformation choice. Finally, we use step generalized additive model (GAM) regression to check the significance of adding non parametric terms to our model.
+
+To recap, these are the variables from our best 10 fold cross-validated model:
 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
 
@@ -25,6 +31,7 @@ library(extrafont)
 library(grid)
 library(gridExtra)
 library(caret)
+library(ggpubr)
 
 ```
 
@@ -53,7 +60,50 @@ iod.clean = iod.clean %>%
 
 ```
 
-```{r, echo = FALSE, fig.height=5, fig.width=5, fig.align='center'}
+```{r, echo = FALSE, massage = FALSE, results = 'asis'}
+
+### Create variable description table
+
+varnames = names(iod.clean)
+
+vardesc = c("Glomerular Filtration Rate",
+            "Serum Urea Nitrogen",
+            "Serum Creatinine",
+            "Age",
+            "Female = 1",
+            "Serum Cystatin",
+            "Diabetes = 1",
+            "Body Mass Index",
+            "Black = 1")
+
+vartype = c("Continuous",
+            "Continuous",
+            "Continuous",
+            "Continuous",
+            "Binary",
+            "Continuous",
+            "Binary",
+            "Continuous",
+            "Binary")
+
+table1.data = data.frame(Variable = varnames, Description = vardesc, Type = vartype)
+
+stargazer(table1.data,
+          header = FALSE,
+          title = "Variable Descriptions",
+          table.placement = 'H',
+          summary = FALSE,
+          rownames = FALSE)
+
+```
+
+The model from the last homework takes the form:
+
+$$ E[GFR] = \beta_0 + \beta_1 SUN + \beta_2 SCR +\beta_3AGE + \beta_4 cys + \beta_5BMI + \beta_6Female + \beta_7Black + \beta_8Diabetes   $$
+
+To start, we considered whether or not to transform our outcome variable, GFR, to the log scale. We would like the outcome variable to be as normally distributed as possible. We can compare normailty using qqplots:
+
+```{r, echo = FALSE, fig.height=3, fig.width=4, fig.align='center'}
 
 ### First consider log transforms of continuous variables
 
@@ -61,19 +111,22 @@ iod.clean = iod.clean %>%
 
 gfr.qq = iod.clean %>%
   ggplot(aes(sample = scale(GFR))) +
-  stat_qq() + stat_qq_line() +
-  stat_qq(aes(sample = scale(log(GFR))), color = "blue") +
+  stat_qq(size = .8) + stat_qq_line() +
+  stat_qq(aes(sample = scale(log(GFR))), color = "blue", size = .8) +
   ylab("Sample Quantile") + 
   xlab("Theoretical Quantile") +
   ggtitle("qqPlot: GFR (Black) vs log GFR (Blue)") +
   theme_classic() +
-  theme(text=element_text(size=12,  family="CM Sans"))
+  theme(text=element_text(size=9,  family="CM Sans"))
   
 
 gfr.qq
 
-
 ```
+
+In the qqPlot, we are looking for the transformation that puts the points closest to the 45 degree line. We see that the log transformation (in blue) seems to be better, though it is not perfect. We use log GFR as the outcome variable for the rest of the analysis. 
+
+We then create scatter plots between each of the continuous variables and log GFR. We also overlay a smoothing spline on each of the scatter plots, which may clue us in on appropriate transformation choices:
 
 ```{r, echo = FALSE}
 
@@ -92,7 +145,6 @@ iod.clean = iod.clean %>%
          logBMI = log(BMI))
 
 ```
-
 
 ```{r, echo = FALSE, fig.width=12, fig.height=12}
 
@@ -151,9 +203,15 @@ grid.arrange(sun.smooth, scr.smooth,
              bmi.smooth,
              nrow = 3)
   
-
-
 ```
+
+We see that the scatter plots for SUN, SCR, and CYS exhibit substantial nonlinearity (seen from the curvature in the smoothing spline). The the nonlinearity of AGE and BMI are not as visually obvious. We test for nonlinearity in the following sections. 
+
+We used 10 fold cross validation to individually choose our transformations. For polynomials, we cross validated to determine the best degree. For step-functions, we cross validated to determine the best number of steps. For natural splines, we cross validated to determine the best number of degrees of freedom. The criterion for choosing the "best" transformation is the lowest average mean squared error on the test set. We also cross validated each transformation using the log transformed independent variable. 
+
+Ideally, we would like our model to be parametric. Our strategy is to compare the parametric transformations to the non parameteric smoothing spline. We will compare the fits of our best parametric transformations to the smoothing spline using ANOVA. If the parametric transformation explains variation in GFR as well as the smoothing spline, we will give preference to the parametric function.
+
+We employ this strategy for each of the continuous variables. We start with SUN:
 
 
 ```{r, echo = FALSE}
@@ -242,8 +300,6 @@ beststep = function(x, y, folds, maxbreaks){
   
   
 }
-
-
 
 
 ```
@@ -342,10 +398,122 @@ sun.transforms = iod.clean %>%
   geom_line(aes(y = sun.step.preds, colour = "Best Step"), size = 1.5) +
   geom_line(aes(y = sun.poly.preds, colour = "Best Poly"), size = 1.5) +
   geom_line(aes(y = sun.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
+  scale_colour_manual(name = "Legend:", values = cols)
   
 
 ```
+
+
+```{r, echo = FALSE, fig.height=10, fig.width=10}
+
+### log SUN best transforms
+
+
+### Poly
+log.sun.best.poly = which.min(bestpoly(x = iod.clean$logSUN, y = iod.clean$logGFR, 
+                         folds = 10, maxpoly = 10))
+
+log.sun.poly.mod = lm(logGFR ~ poly(logSUN, log.sun.best.poly), data = iod.clean)
+
+iod.clean = iod.clean %>%
+  mutate(log.sun.poly.preds = predict(log.sun.poly.mod))
+
+
+### Step
+
+log.sun.best.step = which.min(beststep(x = iod.clean$logSUN, y = iod.clean$logGFR,
+                                   folds = 10, maxbreaks = 5))
+
+log.sun.step.mod = lm(logGFR ~ cut(logSUN, breaks = log.sun.best.step + 1), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(log.sun.step.preds = predict(log.sun.step.mod))
+
+
+### Spline
+
+log.sun.best.spline = which.min(bestspline(x = iod.clean$logSUN, y = iod.clean$logGFR,
+                                   folds = 10, dfs = 10))
+
+log.sun.spline.mod = lm(logGFR ~ ns(logSUN, df = log.sun.best.spline), data = iod.clean)
+
+
+iod.clean = iod.clean %>%
+  mutate(log.sun.spline.preds = predict(log.sun.spline.mod))
+
+log.sun.transforms = iod.clean %>%
+  ggplot(aes(y = logGFR, x = logSUN)) +
+  geom_point() +
+  geom_smooth(aes(colour = "Smoothing Spline"), method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
+  ylab("log(GFR)") +
+  xlab("log(SUN)") +
+  ggtitle("log(GFR) vs log(SUN)") +
+  theme_classic() +
+  theme(text=element_text(size=12,  family="CM Sans")) +
+  geom_line(aes(y = log.sun.step.preds, colour = "Best Step"), size = 1.5) +
+  geom_line(aes(y = log.sun.poly.preds, colour = "Best Poly"), size = 1.5) +
+  geom_line(aes(y = log.sun.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
+  scale_colour_manual(name = "Legend:", values = cols)
+  
+  
+
+```
+
+```{r, echo = FALSE, fig.width=8}
+
+ggarrange(sun.transforms, log.sun.transforms, common.legend = TRUE, legend = "top")
+
+```
+
+We see that the scatter plot for SUN has many values at SUN = 0. These values should be investigated further to see if there is measurement error or some systematic difference. However, for this analysis we will assume they are correct and choose the model with the best adjusted $R^2$. Here are the adjusted $R^2$ values for each of the above parametric fits:
+
+```{r, echo = FALSE}
+
+### Function to get r2
+
+rsquared = function(x){
+  
+  summaryx = summary(x)
+  
+  return(summaryx$adj.r.squared)
+  
+}
+
+
+```
+
+```{r, echo = FALSE, results = 'asis'}
+
+### Rsquared table for sun
+
+sun.rs = c(rsquared(sun.poly.mod),
+           rsquared(sun.step.mod),
+           rsquared(sun.spline.mod),
+           rsquared(log.sun.poly.mod),
+           rsquared(log.sun.step.mod),
+           rsquared(log.sun.spline.mod))
+
+rs.name = c("Polynomial",
+            "Step",
+            "Natural Spline",
+            "log Polynomial",
+            "log Step",
+            "log Natural Spline")
+
+sun.r2.data = data.frame(adjRsquared = sun.rs, Transformation = rs.name)
+
+stargazer(sun.r2.data,
+          title = "SUN Adjusted R2",
+          header = FALSE,
+          summary = FALSE,
+          table.placement = 'H',
+          rownames = FALSE
+          )
+
+```
+
+We see that our best fit (highest $R^2$) uses a polynomial transformation on log SUN. We repeat this process for the remaining 4 continuous variables:
 
 ```{r, echo = FALSE, fig.height=10, fig.width=10}
 
@@ -397,7 +565,7 @@ scr.transforms = iod.clean %>%
   geom_line(aes(y = scr.step.preds, colour = "Best Step"), size = 1.5) +
   geom_line(aes(y = scr.poly.preds, colour = "Best Poly"), size = 1.5) +
   geom_line(aes(y = scr.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
+  scale_colour_manual(name = "Legend:", values = cols)
   
 
 ```
@@ -452,7 +620,7 @@ age.transforms = iod.clean %>%
   geom_line(aes(y = age.step.preds, colour = "Best Step"), size = 1.5) +
   geom_line(aes(y = age.poly.preds, colour = "Best Poly"), size = 1.5) +
   geom_line(aes(y = age.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
+  scale_colour_manual(name = "Legend:", values = cols)
   
 
 ```
@@ -507,7 +675,7 @@ cys.transforms = iod.clean %>%
   geom_line(aes(y = cys.step.preds, colour = "Best Step"), size = 1.5) +
   geom_line(aes(y = cys.poly.preds, colour = "Best Poly"), size = 1.5) +
   geom_line(aes(y = cys.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
+  scale_colour_manual(name = "Legend:", values = cols)
   
 
 ```
@@ -562,67 +730,8 @@ bmi.transforms = iod.clean %>%
   geom_line(aes(y = bmi.step.preds, colour = "Best Step"), size = 1.5) +
   geom_line(aes(y = bmi.poly.preds, colour = "Best Poly"), size = 1.5) +
   geom_line(aes(y = bmi.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
+  scale_colour_manual(name = "Legend:", values = cols)
   
-
-```
-
-
-
-```{r, echo = FALSE, fig.height=10, fig.width=10}
-
-### log SUN best transforms
-
-
-### Poly
-log.sun.best.poly = which.min(bestpoly(x = iod.clean$logSUN, y = iod.clean$logGFR, 
-                         folds = 10, maxpoly = 10))
-
-log.sun.poly.mod = lm(logGFR ~ poly(logSUN, log.sun.best.poly), data = iod.clean)
-
-iod.clean = iod.clean %>%
-  mutate(log.sun.poly.preds = predict(log.sun.poly.mod))
-
-
-### Step
-
-log.sun.best.step = which.min(beststep(x = iod.clean$logSUN, y = iod.clean$logGFR,
-                                   folds = 10, maxbreaks = 5))
-
-log.sun.step.mod = lm(logGFR ~ cut(logSUN, breaks = log.sun.best.step + 1), data = iod.clean)
-
-
-iod.clean = iod.clean %>%
-  mutate(log.sun.step.preds = predict(log.sun.step.mod))
-
-
-### Spline
-
-log.sun.best.spline = which.min(bestspline(x = iod.clean$logSUN, y = iod.clean$logGFR,
-                                   folds = 10, dfs = 10))
-
-log.sun.spline.mod = lm(logGFR ~ ns(logSUN, df = log.sun.best.spline), data = iod.clean)
-
-
-iod.clean = iod.clean %>%
-  mutate(log.sun.spline.preds = predict(log.sun.spline.mod))
-
-log.sun.transforms = iod.clean %>%
-  ggplot(aes(y = logGFR, x = logSUN)) +
-  geom_point() +
-  geom_smooth(aes(colour = "Smoothing Spline"), method = "gam", formula = y ~ s(x, bs = "cs"), se = FALSE, size = 1.5) +
-  ylab("log(GFR)") +
-  xlab("log(SUN)") +
-  ggtitle("log(GFR) vs log(SUN)") +
-  theme_classic() +
-  theme(text=element_text(size=12,  family="CM Sans")) +
-  geom_line(aes(y = log.sun.step.preds, colour = "Best Step"), size = 1.5) +
-  geom_line(aes(y = log.sun.poly.preds, colour = "Best Poly"), size = 1.5) +
-  geom_line(aes(y = log.sun.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
-  
-  
-
 ```
 
 ```{r, echo = FALSE, fig.height=10, fig.width=10}
@@ -675,7 +784,7 @@ log.scr.transforms = iod.clean %>%
   geom_line(aes(y = log.scr.step.preds, colour = "Best Step"), size = 1.5) +
   geom_line(aes(y = log.scr.poly.preds, colour = "Best Poly"), size = 1.5) +
   geom_line(aes(y = log.scr.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
+  scale_colour_manual(name = "Legend:", values = cols)
   
 
 ```
@@ -730,7 +839,7 @@ log.age.transforms = iod.clean %>%
   geom_line(aes(y = log.age.step.preds, colour = "Best Step"), size = 1.5) +
   geom_line(aes(y = log.age.poly.preds, colour = "Best Poly"), size = 1.5) +
   geom_line(aes(y = log.age.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
+  scale_colour_manual(name = "Legend:", values = cols)
   
 
 ```
@@ -785,7 +894,7 @@ log.cys.transforms = iod.clean %>%
   geom_line(aes(y = log.cys.step.preds, colour = "Best Step"), size = 1.5) +
   geom_line(aes(y = log.cys.poly.preds, colour = "Best Poly"), size = 1.5) +
   geom_line(aes(y = log.cys.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
+  scale_colour_manual(name = "Legend:", values = cols)
   
 
 ```
@@ -840,35 +949,181 @@ log.bmi.transforms = iod.clean %>%
   geom_line(aes(y = log.bmi.step.preds, colour = "Best Step"), size = 1.5) +
   geom_line(aes(y = log.bmi.poly.preds, colour = "Best Poly"), size = 1.5) +
   geom_line(aes(y = log.bmi.spline.preds, colour = "Best Natural Spline"), size = 1.5) +
-  scale_colour_manual(name = "Legend", values = cols)
+  scale_colour_manual(name = "Legend:", values = cols)
   
-
 ```
 
-```{r, echo = FALSE, fig.height=12, fig.width=10}
+```{r, echo = FALSE, fig.height=12, fig.width=8, cache = TRUE}
 
-### test all plots
+other4 = ggarrange(scr.transforms, log.scr.transforms, 
+          age.transforms, log.age.transforms,
+          cys.transforms, log.cys.transforms,
+          bmi.transforms, log.bmi.transforms,
+          ncol = 2, nrow = 4,
+          common.legend = TRUE, legend = "top")
 
-grid.arrange(sun.transforms, log.sun.transforms,
-             scr.transforms, log.scr.transforms,
-             age.transforms, log.age.transforms,
-             cys.transforms, log.cys.transforms,
-             bmi.transforms, log.bmi.transforms,
-             ncol = 2)
-
+other4
 
 ```
 
 ```{r, echo = FALSE, results = 'asis'}
 
-### Example GAM
+### Rsquared table for other vars
 
-test = gam(logGFR ~ ns(logSCR, 5) +
-             poly(SUN, 7) +
-             s(cys) + 
-             FEMALE, data = iod.clean)
+scr.rs = c(rsquared(scr.poly.mod),
+           rsquared(scr.step.mod),
+           rsquared(scr.spline.mod),
+           rsquared(log.scr.poly.mod),
+           rsquared(log.scr.step.mod),
+           rsquared(log.scr.spline.mod))
 
+age.rs = c(rsquared(age.poly.mod),
+           rsquared(age.step.mod),
+           rsquared(age.spline.mod),
+           rsquared(log.age.poly.mod),
+           rsquared(log.age.step.mod),
+           rsquared(log.age.spline.mod))
 
-plot(test)
+cys.rs = c(rsquared(cys.poly.mod),
+           rsquared(cys.step.mod),
+           rsquared(cys.spline.mod),
+           rsquared(log.cys.poly.mod),
+           rsquared(log.cys.step.mod),
+           rsquared(log.cys.spline.mod))
+
+bmi.rs = c(rsquared(bmi.poly.mod),
+           rsquared(bmi.step.mod),
+           rsquared(bmi.spline.mod),
+           rsquared(log.bmi.poly.mod),
+           rsquared(log.bmi.step.mod),
+           rsquared(log.bmi.spline.mod))
+
+rs.name = c("Polynomial",
+            "Step",
+            "Natural Spline",
+            "log Polynomial",
+            "log Step",
+            "log Natural Spline")
+
+r2.data.4 = data.frame(SUN = sun.rs, SCR = scr.rs, AGE = age.rs,
+                       CYS = cys.rs, BMI = bmi.rs,
+                       Transformation = rs.name)
+
+stargazer(r2.data.4,
+          title = "Adjusted R2 for Each Variable and Transformation",
+          header = FALSE,
+          summary = FALSE,
+          table.placement = 'H',
+          rownames = FALSE
+          )
 
 ```
+
+The transformations with the highest $R^2$ for each variable are:
+
+* SUN: log polynomial
+* SCR: natural spline
+* AGE: log polynomial
+* CYS: natural spline
+* BMI: polynomial (tie, choose polynomial for simplicity)
+
+Using these transformations our model has the form:
+
+$$ E[GFR] = \beta_0 + \beta poly(logSUN, 7) + ns(SCR, 9) +\beta poly(logAGE,5) + \beta ns(cys, 7) + $$
+$$ \beta poly(BMI, 4) + \beta Female + \beta Black + \beta Diabetes   $$
+
+Next, we run step wise selection in a GAM using our best transformations as the starting point. Here are the steps: 
+
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+
+### Step GAM
+
+gam.start = gam(log(GFR)~ poly(logSUN, log.sun.best.poly) +
+                  ns(SCR, scr.best.spline) + 
+                  poly(logAGE, log.age.best.poly) +
+                  ns(cys, cys.best.spline) +
+                  poly(BMI, bmi.best.poly) +
+                  FEMALE + 
+                  BLACK +
+                  Diabetes, data=iod.clean)
+
+gam.scope=list("logSUN" =~ 1 + logSUN + poly(logSUN, log.sun.best.poly) + s(logSUN,4),
+               "SCR" =~ 1 + SCR + ns(SCR, scr.best.spline) + s(SCR,4),
+               "logAGE" =~ 1 + logAGE + poly(logAGE, log.age.best.poly) + s(logAGE,4),
+               "cys" =~ 1 + cys + ns(cys, cys.best.spline) + s(cys,4),
+               "BMI" =~ 1 + BMI + poly(BMI, bmi.best.poly) + s(BMI,4),
+               "Diabetes" =~ 1 + Diabetes,
+               "FEMALE"=~1+FEMALE,
+               "BLACK"=~1+BLACK)
+
+mod = step.Gam(gam.start,gam.scope,direction="both",trace=F)
+
+```
+
+
+```{r, echo =FALSE, results = 'asis'}
+
+gam.drops = mod$anova %>%
+  select(From, To, "Resid. Dev", AIC)
+
+stargazer(gam.drops,
+          header = FALSE,
+          summary = FALSE,
+          table.placement = 'H',
+          title = "GAM Steps", rownames = FALSE)
+
+```
+
+We see from the above table that the step.Gam function chooses smoothing splines for logSUN, logAGE, cys, and BMI. The only continuous variable that was not switched to a smoothing spline was SCR. We also see that the Diabetes variable was dropped from the model. 
+
+```{r, echo = FALSE, results = 'asis'}
+
+model1 = lm(GFR ~ SUN + SCR + AGE + FEMALE +
+                   cys + Diabetes, data = iod.clean)
+
+model2 = mgcv::gam(log(GFR)~ poly(logSUN, log.sun.best.poly) +
+                  ns(SCR, scr.best.spline) + 
+                  poly(logAGE, log.age.best.poly) +
+                  ns(cys, cys.best.spline) +
+                  poly(BMI, bmi.best.poly) +
+                  FEMALE + 
+                  BLACK +
+                  Diabetes, data=iod.clean)
+
+model3 = mgcv::gam(log(GFR)~ s(logSUN) +
+                  ns(SCR, scr.best.spline) + 
+                  s(logAGE) +
+                  s(cys) +
+                  s(BMI) +
+                  FEMALE + 
+                  BLACK,
+                  data=iod.clean)
+
+sum.model1 = summary(model1)
+
+final.names = c("No Transformations",
+                "Parametric",
+                "Non Parametric")
+
+final.aic = c(AIC(model1), AIC(model2), -1222.890)
+
+final.r2 = c(sum.model1$adj.r.squared, summary(model2)$r.sq, summary(model3)$r.sq)
+
+final.table = data.frame(Model = final.names, AIC = final.aic, R2 = final.r2)
+
+stargazer(final.table,
+          header = FALSE,
+          table.placement = 'H',
+          rownames = FALSE,
+          title = "AIC for Each Model",
+          summary = FALSE)
+
+
+```
+
+
+```{r ref.label=knitr::all_labels(), echo = T, eval = F}
+```
+
+
