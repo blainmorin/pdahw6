@@ -12,7 +12,7 @@ In this assignment, we build upon the model for predicting glomerular filtration
 
 Our strategy is to first fit polynomial, natural spline, and step transformations for each independent variable individually against the outcome. We tune each transformation using 10 fold cross validation. After determining the best form of each transformation, we compare their overall fits to the data to determine the best transformation choice. Finally, we use step generalized additive model (GAM) regression to check the significance of adding non parametric terms to our model.
 
-To recap, these are the variables from our best 10 fold cross-validated model:
+These are the variables found to be predictive from homework 5:
 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
 
@@ -97,11 +97,11 @@ stargazer(table1.data,
 
 ```
 
-The model from the last homework takes the form:
+The model with no transformations takes the form:
 
-$$ E[GFR] = \beta_0 + \beta_1 SUN + \beta_2 SCR +\beta_3AGE + \beta_4 cys + \beta_5BMI + \beta_6Female + \beta_7Black + \beta_8Diabetes   $$
+$$ Model (1): E[GFR] = \beta_0 + \beta_1 SUN + \beta_2 SCR +\beta_3AGE + \beta_4 cys + \beta_5BMI + \beta_6Female + \beta_7Black + \beta_8Diabetes   $$
 
-To start, we considered whether or not to transform our outcome variable, GFR, to the log scale. We would like the outcome variable to be as normally distributed as possible. We can compare normailty using qqplots:
+To start, we considered whether or not to transform our outcome variable, GFR, to the log scale. We would like the outcome variable to be as normally distributed as possible. We can compare normality using qqplots:
 
 ```{r, echo = FALSE, fig.height=3, fig.width=4, fig.align='center'}
 
@@ -207,9 +207,7 @@ grid.arrange(sun.smooth, scr.smooth,
 
 We see that the scatter plots for SUN, SCR, and CYS exhibit substantial nonlinearity (seen from the curvature in the smoothing spline). The the nonlinearity of AGE and BMI are not as visually obvious. We test for nonlinearity in the following sections. 
 
-We used 10 fold cross validation to individually choose our transformations. For polynomials, we cross validated to determine the best degree. For step-functions, we cross validated to determine the best number of steps. For natural splines, we cross validated to determine the best number of degrees of freedom. The criterion for choosing the "best" transformation is the lowest average mean squared error on the test set. We also cross validated each transformation using the log transformed independent variable. 
-
-Ideally, we would like our model to be parametric. Our strategy is to compare the parametric transformations to the non parameteric smoothing spline. We will compare the fits of our best parametric transformations to the smoothing spline using ANOVA. If the parametric transformation explains variation in GFR as well as the smoothing spline, we will give preference to the parametric function.
+We use 10 fold cross validation to individually choose our transformations. For polynomials, we cross validate to determine the best degree. For step-functions, we cross validate to determine the best number of steps. For natural splines, we cross validate to determine the best number of degrees of freedom. The criterion for choosing the "best" transformation is the lowest average mean squared error on the test set. We also cross validated each transformation using the log transformed independent variable. 
 
 We employ this strategy for each of the continuous variables. We start with SUN:
 
@@ -513,7 +511,7 @@ stargazer(sun.r2.data,
 
 ```
 
-We see that our best fit (highest $R^2$) uses a polynomial transformation on log SUN. We repeat this process for the remaining 4 continuous variables:
+We see that our best fit (highest adjusted $R^2$) uses a polynomial transformation on log SUN. We repeat this process for the remaining 4 continuous variables:
 
 ```{r, echo = FALSE, fig.height=10, fig.width=10}
 
@@ -966,6 +964,8 @@ other4
 
 ```
 
+For each variable and transformation, we extracted the adjusted $R^2$:
+
 ```{r, echo = FALSE, results = 'asis'}
 
 ### Rsquared table for other vars
@@ -1019,7 +1019,7 @@ stargazer(r2.data.4,
 
 ```
 
-The transformations with the highest $R^2$ for each variable are:
+The transformations with the highest adjusted $R^2$ for each variable are:
 
 * SUN: log polynomial
 * SCR: natural spline
@@ -1029,10 +1029,36 @@ The transformations with the highest $R^2$ for each variable are:
 
 Using these transformations our model has the form:
 
-$$ E[GFR] = \beta_0 + \beta poly(logSUN, 7) + ns(SCR, 9) +\beta poly(logAGE,5) + \beta ns(cys, 7) + $$
+$$ Model (2):E[logGFR] = \beta_0 + \beta poly(logSUN, 7) + \beta ns(SCR, 9) +\beta poly(logAGE,5) + \beta ns(cys, 7) + $$
 $$ \beta poly(BMI, 4) + \beta Female + \beta Black + \beta Diabetes   $$
 
-Next, we run step wise selection in a GAM using our best transformations as the starting point. Here are the steps: 
+We then perform joint significance tests for each of the terms:
+
+```{r, echo = FALSE, results='asis'}
+
+model2 = mgcv::gam(log(GFR)~ poly(logSUN, log.sun.best.poly) +
+                  ns(SCR, scr.best.spline) + 
+                  poly(logAGE, log.age.best.poly) +
+                  ns(cys, cys.best.spline) +
+                  poly(BMI, bmi.best.poly) +
+                  FEMALE + 
+                  BLACK +
+                  Diabetes, data=iod.clean)
+
+sum.model2 = summary(model2)
+
+stargazer(sum.model2$pTerms.table,
+          summary = FALSE,
+          header = FALSE,
+          table.placement = 'H',
+          title = "Model (2) Terms")
+
+```
+
+
+In the table above, the degrees of freedom show how many beta coefficients are added to the model by each term. The F-statistic tests the joint significance of all terms. We see that the Diabetes variable is no longer significant. 
+
+Next, we run step wise selection in a GAM using our best transformations as the starting point. The scope of our step procedure allows for each term to be linear, the parametric transformation we chose above, or a non-parametric smoothing spline. Here are the steps: 
 
 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
@@ -1048,10 +1074,10 @@ gam.start = gam(log(GFR)~ poly(logSUN, log.sun.best.poly) +
                   BLACK +
                   Diabetes, data=iod.clean)
 
-gam.scope=list("logSUN" =~ 1 + logSUN + poly(logSUN, log.sun.best.poly) + s(logSUN,4),
-               "SCR" =~ 1 + SCR + ns(SCR, scr.best.spline) + s(SCR,4),
-               "logAGE" =~ 1 + logAGE + poly(logAGE, log.age.best.poly) + s(logAGE,4),
-               "cys" =~ 1 + cys + ns(cys, cys.best.spline) + s(cys,4),
+gam.scope=list("logSUN" =~ 1 + logSUN + poly(logSUN, log.sun.best.poly) + s(logSUN, 4),
+               "SCR" =~ 1 + SCR + ns(SCR, scr.best.spline) + s(SCR, scr.best.spline),
+               "logAGE" =~ 1 + logAGE + poly(logAGE, log.age.best.poly) + s(logAGE, 4),
+               "cys" =~ 1 + cys + ns(cys, cys.best.spline) + s(cys, cys.best.spline),
                "BMI" =~ 1 + BMI + poly(BMI, bmi.best.poly) + s(BMI,4),
                "Diabetes" =~ 1 + Diabetes,
                "FEMALE"=~1+FEMALE,
@@ -1077,19 +1103,14 @@ stargazer(gam.drops,
 
 We see from the above table that the step.Gam function chooses smoothing splines for logSUN, logAGE, cys, and BMI. The only continuous variable that was not switched to a smoothing spline was SCR. We also see that the Diabetes variable was dropped from the model. 
 
+The step function is choosing by AIC, which does not necessarily mean that the nonparameteric part is significant because some of the parametric terms from the starting model contained many coefficients. For example: the polynomial transformation for logSun adds 7 variables to the model. In contrast, the smoothing spline for logSun only contains 4 degrees of freedom. Therefore, it is not clear whether the reduction in AIC is due to reduced degrees of freedom used or is due to the non parametric part of the fit explaining significant variation. This uncertainty could be assessed with further tuning of the parametric parameters within the fully specified model.
+
+Here are the ANOVA tests for the parametric and nonparametric terms for the model selected by step.Gam:
+
 ```{r, echo = FALSE, results = 'asis'}
 
 model1 = lm(GFR ~ SUN + SCR + AGE + FEMALE +
                    cys + Diabetes, data = iod.clean)
-
-model2 = mgcv::gam(log(GFR)~ poly(logSUN, log.sun.best.poly) +
-                  ns(SCR, scr.best.spline) + 
-                  poly(logAGE, log.age.best.poly) +
-                  ns(cys, cys.best.spline) +
-                  poly(BMI, bmi.best.poly) +
-                  FEMALE + 
-                  BLACK +
-                  Diabetes, data=iod.clean)
 
 model3 = mgcv::gam(log(GFR)~ s(logSUN) +
                   ns(SCR, scr.best.spline) + 
@@ -1100,27 +1121,70 @@ model3 = mgcv::gam(log(GFR)~ s(logSUN) +
                   BLACK,
                   data=iod.clean)
 
+model3a = gam(log(GFR)~ s(logSUN) +
+                  ns(SCR, scr.best.spline) + 
+                  s(logAGE) +
+                  s(cys) +
+                  s(BMI) +
+                  FEMALE + 
+                  BLACK,
+                  data=iod.clean)
+```
+
+```{r, echo = FALSE, results = 'asis'}
+
+sum.model3a = summary.Gam(model3a)
+
+stargazer(sum.model3a$parametric.anova,
+          summary = FALSE,
+          header = FALSE,
+          table.placement = 'H',
+          title = "Model (3) Parametric Terms")
+
+stargazer(sum.model3a$anova,
+          header = FALSE,
+          summary = FALSE,
+          table.placement = 'H',
+          title = "Model (3) Non-Parametric Terms")
+
+```
+
+We see that the joint significance test for all of the parametric parts of the model are highly significant. We also see that the nonparametric parts of the model are also significant, which means they are explaining a significant amount of the variation in logGFR. 
+
+
+Lastly, we compare the AIC and R2 for the three models:
+
+
+```{r, echo = FALSE, results = 'asis'}
+
 sum.model1 = summary(model1)
 
-final.names = c("No Transformations",
-                "Parametric",
-                "Non Parametric")
+final.names = c("(1) No Transformations",
+                "(2) Parametric",
+                "(3) Non Parametric")
 
-final.aic = c(AIC(model1), AIC(model2), -1222.890)
+final.aic = c(AIC(model1), AIC(model2), -1221.916)
 
 final.r2 = c(sum.model1$adj.r.squared, summary(model2)$r.sq, summary(model3)$r.sq)
 
-final.table = data.frame(Model = final.names, AIC = final.aic, R2 = final.r2)
+final.table = data.frame(Model = final.names, AIC = final.aic, adj.R2 = final.r2)
 
 stargazer(final.table,
           header = FALSE,
           table.placement = 'H',
           rownames = FALSE,
-          title = "AIC for Each Model",
+          title = "AIC and adj R2 for Each Model",
           summary = FALSE)
 
 
 ```
+
+The AIC decreases from 19,126 to -1,213 when moving from model (1) to model (2). Moreover, the adjusted $R^2$ increases from .682 to .895. This is a substantial improvement in fit and is strong evidence that we should use transformations. 
+
+The improvement in AIC moving from model (2) to model (3) is relatively small. There is no difference in adjusted $R^2$. Because the models perform similarly, we recommend using the parametric (model (2)). The parametric model is preferable because it allows us to make predictions on new data. The nonparametric model (model (3)) is dependent on the data, which makes it difficult to use in prediction. 
+
+# 
+# Appendix: R code 
 
 
 ```{r ref.label=knitr::all_labels(), echo = T, eval = F}
