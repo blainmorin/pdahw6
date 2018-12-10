@@ -1183,6 +1183,8 @@ The AIC decreases from 19,126 to -1,213 when moving from model (1) to model (2).
 
 The improvement in AIC moving from model (2) to model (3) is relatively small. There is no difference in adjusted $R^2$. Because the models perform similarly, we recommend using the parametric (model (2)). The parametric model is preferable because it allows us to make predictions on new data. The nonparametric model (model (3)) is dependent on the data, which makes it difficult to use in prediction. 
 
+Overall, an adjusted $R^2$ of .895 is relatively high. Further improvements in fit could be investigated by cross validating the smoothing spline's degrees of freedom. We could also invesigate the individual terms of the transformations to see if their significance persists when other variables are added to the model. 
+
 # 
 # Appendix: R code 
 
